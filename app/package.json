@@ -1,0 +1,12 @@
+{
+  "name": "scott-website",
+  "version": "0.0.1",
+  "description": "JSApp for the personal website. Totally over-engineered.",
+  "dependencies": {
+    "backbone": "",
+    "backbone.marionette": "",
+    "jquery": "1.11.1",
+    "node-underscorify": "",
+    "underscore": ""
+  } 
+}
