@@ -6,6 +6,7 @@
     "backbone": "",
     "backbone.marionette": "",
     "jquery": "1.11.1",
+    "markdown": "",
     "node-underscorify": "",
     "underscore": ""
   } 
