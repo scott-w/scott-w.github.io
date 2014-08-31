@@ -48,6 +48,19 @@ App.addInitializer(function(options) {
   });
 
   Backbone.history.start();
+
+  $.ajax({
+    url: 'https://api.github.com/repos/scott-w/scott-w.github.io',
+    type: 'get',
+    success: function(res) {
+      console.log('success');
+      console.log(res);
+    },
+    error: function(res) {
+      console.log('error');
+      console.log(res);
+    }
+  });
 });
 
 App.start();
