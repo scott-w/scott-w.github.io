@@ -21,39 +21,23 @@ App.addInitializer(function(options) {
   };
 
   this.addRegions(regions);
-  var router = new Router();
 
   var nav = new Nav([
     {name: 'Home', active: true, href: ''},
     {name: 'Interests', href: 'interests'}
   ]);
+
+  var router = new Router({app: this, collection: nav});
   var navView = new NavView({collection: nav});
 
   this.navbar.show(navView);
-
-  var links = Backbone.Wreqr.radio.channel('link');
-
-  var app = this;
-  links.vent.on('clicked', function(link) {
-    var views = {
-      home: require('./views/home'),
-      interests: require('./views/interests')
-    };
-    var navs = {
-      home: '',
-      interests: 'interests'
-    };
-    Backbone.history.navigate(navs[link]);
-
-    app.main.show(new views[link]())
-  });
 
   Backbone.history.start();
 });
 
 App.start();
 
-},{"./collections/nav":3,"./router":12,"./views/home":18,"./views/interests":19,"./views/nav":20,"backbone":8,"backbone.marionette":4,"underscore":11}],2:[function(require,module,exports){
+},{"./collections/nav":3,"./router":12,"./views/nav":20,"backbone":8,"backbone.marionette":4,"underscore":11}],2:[function(require,module,exports){
 var Backbone = require('backbone');
 
 
@@ -75,7 +59,7 @@ module.exports = Nav;
 },{"backbone":8}],4:[function(require,module,exports){
 // MarionetteJS (Backbone.Marionette)
 // ----------------------------------
-// v2.1.0
+// v2.2.2
 //
 // Copyright (c)2014 Derick Bailey, Muted Solutions, LLC.
 // Distributed under MIT license
@@ -105,7 +89,7 @@ module.exports = Nav;
 
   var Marionette = Backbone.Marionette = {};
 
-  Marionette.VERSION = '2.1.0';
+  Marionette.VERSION = '2.2.2';
 
   Marionette.noConflict = function() {
     root.Marionette = previousMarionette;
@@ -122,12 +106,6 @@ module.exports = Nav;
   
   // For slicing `arguments` in functions
   var slice = Array.prototype.slice;
-  
-  function throwError(message, name) {
-    var error = new Error(message);
-    error.name = name || 'Error';
-    throw error;
-  }
   
   // Marionette.extend
   // -----------------
@@ -177,22 +155,47 @@ module.exports = Nav;
     return normalizedHash;
   };
   
+  // utility method for parsing @ui. syntax strings
+  // into associated selector
+  Marionette.normalizeUIString = function(uiString, ui) {
+    return uiString.replace(/@ui\.[a-zA-Z_$0-9]*/g, function(r) {
+      return ui[r.slice(4)];
+    });
+  };
   
   // allows for the use of the @ui. syntax within
   // a given key for triggers and events
-  // swaps the @ui with the associated selector
+  // swaps the @ui with the associated selector.
+  // Returns a new, non-mutated, parsed events hash.
   Marionette.normalizeUIKeys = function(hash, ui) {
     if (typeof(hash) === 'undefined') {
       return;
     }
   
-    _.each(_.keys(hash), function(v) {
-      var pattern = /@ui\.[a-zA-Z_$0-9]*/g;
-      if (v.match(pattern)) {
-        hash[v.replace(pattern, function(r) {
-          return ui[r.slice(4)];
-        })] = hash[v];
-        delete hash[v];
+    hash = _.clone(hash);
+  
+    _.each(_.keys(hash), function(key) {
+      var normalizedKey = Marionette.normalizeUIString(key, ui);
+      if (normalizedKey !== key) {
+        hash[normalizedKey] = hash[key];
+        delete hash[key];
+      }
+    });
+  
+    return hash;
+  };
+  
+  // allows for the use of the @ui. syntax within
+  // a given value for regions
+  // swaps the @ui with the associated selector
+  Marionette.normalizeUIValues = function(hash, ui) {
+    if (typeof(hash) === 'undefined') {
+      return;
+    }
+  
+    _.each(hash, function(val, key) {
+      if (_.isString(val)) {
+        hash[key] = Marionette.normalizeUIString(val, ui);
       }
     });
   
@@ -225,7 +228,7 @@ module.exports = Nav;
   //
   // `this.triggerMethod("foo:bar")` will trigger the "foo:bar" event and
   // call the "onFooBar" method.
-  Marionette.triggerMethod = (function() {
+  Marionette.triggerMethod = function(event) {
   
     // split the event name on the ":"
     var splitter = /(^|:)(\w)/gi;
@@ -236,29 +239,41 @@ module.exports = Nav;
       return eventName.toUpperCase();
     }
   
-    // actual triggerMethod implementation
-    var triggerMethod = function(event) {
-      // get the method name from the event name
-      var methodName = 'on' + event.replace(splitter, getEventName);
-      var method = this[methodName];
-      var result;
+    // get the method name from the event name
+    var methodName = 'on' + event.replace(splitter, getEventName);
+    var method = this[methodName];
+    var result;
   
-      // call the onMethodName if it exists
-      if (_.isFunction(method)) {
-        // pass all arguments, except the event name
-        result = method.apply(this, _.tail(arguments));
-      }
+    // call the onMethodName if it exists
+    if (_.isFunction(method)) {
+      // pass all arguments, except the event name
+      result = method.apply(this, _.tail(arguments));
+    }
   
-      // trigger the event, if a trigger method exists
-      if (_.isFunction(this.trigger)) {
-        this.trigger.apply(this, arguments);
-      }
+    // trigger the event, if a trigger method exists
+    if (_.isFunction(this.trigger)) {
+      this.trigger.apply(this, arguments);
+    }
   
-      return result;
-    };
+    return result;
+  };
   
-    return triggerMethod;
-  })();
+  // triggerMethodOn invokes triggerMethod on a specific context
+  //
+  // e.g. `Marionette.triggerMethodOn(view, 'show')`
+  // will trigger a "show" event or invoke onShow the view.
+  Marionette.triggerMethodOn = function(context, event) {
+    var args = _.tail(arguments, 2);
+    var fnc;
+  
+    if (_.isFunction(context.triggerMethod)) {
+      fnc = context.triggerMethod;
+    } else {
+      fnc = Marionette.triggerMethod;
+    }
+  
+    return fnc.apply(context, [event].concat(args));
+  };
   
   // DOMRefresh
   // ----------
@@ -337,7 +352,7 @@ module.exports = Nav;
   
         var method = target[methodName];
         if (!method) {
-          throwError('Method "' + methodName +
+          throw new Marionette.Error('Method "' + methodName +
             '" was configured as an event handler, but does not exist.');
         }
   
@@ -370,6 +385,14 @@ module.exports = Nav;
     // generic looping function
     function iterateEvents(target, entity, bindings, functionCallback, stringCallback) {
       if (!entity || !bindings) { return; }
+  
+      // type-check bindings
+      if (!_.isFunction(bindings) && !_.isObject(bindings)) {
+        throw new Marionette.Error({
+          message: 'Bindings must be an object or function.',
+          url: 'marionette.functions.html#marionettebindentityevents'
+        });
+      }
   
       // allow the bindings to be a function
       if (_.isFunction(bindings)) {
@@ -411,6 +434,42 @@ module.exports = Nav;
   })(Marionette);
   
 
+  var errorProps = ['description', 'fileName', 'lineNumber', 'name', 'message', 'number'];
+  
+  Marionette.Error = Marionette.extend.call(Error, {
+    urlRoot: 'http://marionettejs.com/docs/v' + Marionette.VERSION + '/',
+  
+    constructor: function(message, options) {
+      if (_.isObject(message)) {
+        options = message;
+        message = options.message;
+      } else if (!options) {
+        options = {};
+      }
+  
+      var error = Error.call(this, message);
+      _.extend(this, _.pick(error, errorProps), _.pick(options, errorProps));
+  
+      this.captureStackTrace();
+  
+      if (options.url) {
+        this.url = this.urlRoot + options.url;
+      }
+    },
+  
+    captureStackTrace: function() {
+      if (Error.captureStackTrace) {
+        Error.captureStackTrace(this, Marionette.Error);
+      }
+    },
+  
+    toString: function() {
+      return this.name + ': ' + this.message + (this.url ? ' See: ' + this.url : '');
+    }
+  });
+  
+  Marionette.Error.extend = Marionette.extend;
+  
   // Callbacks
   // ---------
   
@@ -507,10 +566,9 @@ module.exports = Nav;
   // A Base Class that other Classes should descend from.
   // Object borrows many conventions and utilities from Backbone.
   Marionette.Object = function(options) {
-  
     this.options = _.extend({}, _.result(this, 'options'), options);
   
-    this.initialize(this.options);
+    this.initialize.apply(this, arguments);
   };
   
   Marionette.Object.extend = Marionette.extend;
@@ -562,7 +620,10 @@ module.exports = Nav;
     this.el = this.el instanceof Backbone.$ ? this.el[0] : this.el;
   
     if (!this.el) {
-      throwError('An "el" must be specified for a region.', 'NoElError');
+      throw new Marionette.Error({
+        name: 'NoElError',
+        message: 'An "el" must be specified for a region.'
+      });
     }
   
     this.$el = this.getEl(this.el);
@@ -606,8 +667,10 @@ module.exports = Nav;
         return this._buildRegionFromRegionClass(regionConfig);
       }
   
-      throwError('Improper region configuration type. Please refer ' +
-        'to http://marionettejs.com/docs/marionette.region.html#region-configuration-types');
+      throw new Marionette.Error({
+        message: 'Improper region configuration type.',
+        url: 'marionette.region.html#region-configuration-types'
+      });
     },
   
     // Build the region from a string selector like '#foo-region'
@@ -676,23 +739,30 @@ module.exports = Nav;
     show: function(view, options){
       this._ensureElement();
   
-      var showOptions = options || {};
+      var showOptions     = options || {};
       var isDifferentView = view !== this.currentView;
-      var preventDestroy =  !!showOptions.preventDestroy;
-      var forceShow = !!showOptions.forceShow;
+      var preventDestroy  = !!showOptions.preventDestroy;
+      var forceShow       = !!showOptions.forceShow;
   
-      // we are only changing the view if there is a view to change to begin with
+      // We are only changing the view if there is a current view to change to begin with
       var isChangingView = !!this.currentView;
   
-      // only destroy the view if we don't want to preventDestroy and the view is different
-      var _shouldDestroyView = !preventDestroy && isDifferentView;
+      // Only destroy the current view if we don't want to `preventDestroy` and if
+      // the view given in the first argument is different than `currentView`
+      var _shouldDestroyView = isDifferentView && !preventDestroy;
+  
+      // Only show the view given in the first argument if it is different than
+      // the current view or if we want to re-show the view. Note that if
+      // `_shouldDestroyView` is true, then `_shouldShowView` is also necessarily true.
+      var _shouldShowView = isDifferentView || forceShow;
+  
+      if (isChangingView) {
+        this.triggerMethod('before:swapOut', this.currentView);
+      }
   
       if (_shouldDestroyView) {
         this.empty();
       }
-  
-      // show the view if the view is different or if you want to re-show the view
-      var _shouldShowView = isDifferentView || forceShow;
   
       if (_shouldShowView) {
   
@@ -701,7 +771,7 @@ module.exports = Nav;
         // If this happens we need to remove the reference
         // to the currentView since once a view has been destroyed
         // we can not reuse it.
-        view.once('destroy', _.bind(this.empty, this));
+        view.once('destroy', this.empty, this);
         view.render();
   
         if (isChangingView) {
@@ -709,14 +779,14 @@ module.exports = Nav;
         }
   
         this.triggerMethod('before:show', view);
-  
-        if (_.isFunction(view.triggerMethod)) {
-          view.triggerMethod('before:show');
-        } else {
-          this.triggerMethod.call(view, 'before:show');
-        }
+        Marionette.triggerMethodOn(view, 'before:show');
   
         this.attachHtml(view);
+  
+        if (isChangingView) {
+          this.triggerMethod('swapOut', this.currentView);
+        }
+  
         this.currentView = view;
   
         if (isChangingView) {
@@ -724,12 +794,7 @@ module.exports = Nav;
         }
   
         this.triggerMethod('show', view);
-  
-        if (_.isFunction(view.triggerMethod)) {
-          view.triggerMethod('show');
-        } else {
-          this.triggerMethod.call(view, 'show');
-        }
+        Marionette.triggerMethodOn(view, 'show');
   
         return this;
       }
@@ -744,7 +809,7 @@ module.exports = Nav;
       }
   
       if (!this.$el || this.$el.length === 0) {
-        throwError('An "el" ' + this.$el.selector + ' must exist in DOM');
+        throw new Marionette.Error('An "el" ' + this.$el.selector + ' must exist in DOM');
       }
     },
   
@@ -771,6 +836,7 @@ module.exports = Nav;
       // we should not remove anything
       if (!view) { return; }
   
+      view.off('destroy', this.empty, this);
       this.triggerMethod('before:empty', view);
       this._destroyView();
       this.triggerMethod('empty', view);
@@ -878,16 +944,10 @@ module.exports = Nav;
       addRegion: function(name, definition) {
         var region;
   
-        var isObject = _.isObject(definition);
-        var isString = _.isString(definition);
-        var hasSelector = !!definition.selector;
-  
-        if (isString || (isObject && hasSelector)) {
-          region = Marionette.Region.buildRegion(definition, Marionette.Region);
-        } else if (_.isFunction(definition)) {
-          region = Marionette.Region.buildRegion(definition, Marionette.Region);
-        } else {
+        if (definition instanceof Marionette.Region) {
           region = definition;
+        } else {
+          region = Marionette.Region.buildRegion(definition, Marionette.Region);
         }
   
         this.triggerMethod('before:add:region', name, region);
@@ -1054,7 +1114,10 @@ module.exports = Nav;
       var template = Backbone.$(templateId).html();
   
       if (!template || template.length === 0) {
-        throwError('Could not find template: "' + templateId + '"', 'NoTemplateError');
+        throw new Marionette.Error({
+          name: 'NoTemplateError',
+          message: 'Could not find template: "' + templateId + '"'
+        });
       }
   
       return template;
@@ -1082,8 +1145,10 @@ module.exports = Nav;
     // custom rendering and template handling for all of Marionette.
     render: function(template, data) {
       if (!template) {
-        throwError('Cannot render the template since its false, null or undefined.',
-          'TemplateNotFoundError');
+        throw new Marionette.Error({
+          name: 'TemplateNotFoundError',
+          message: 'Cannot render the template since its false, null or undefined.'
+        });
       }
   
       var templateFunc;
@@ -1113,12 +1178,8 @@ module.exports = Nav;
       // of this.options
       // at some point however this may be removed
       this.options = _.extend({}, _.result(this, 'options'), _.isFunction(options) ? options.call(this) : options);
-      // parses out the @ui DSL for events
-      this.events = this.normalizeUIKeys(_.result(this, 'events'));
   
-      if (_.isObject(this.behaviors)) {
-        new Marionette.Behaviors(this);
-      }
+      this._behaviors = Marionette.Behaviors(this);
   
       Backbone.View.apply(this, arguments);
   
@@ -1154,11 +1215,20 @@ module.exports = Nav;
       return _.extend(target, templateHelpers);
     },
   
-  
+    // normalize the keys of passed hash with the views `ui` selectors.
+    // `{"@ui.foo": "bar"}`
     normalizeUIKeys: function(hash) {
       var ui = _.result(this, 'ui');
       var uiBindings = _.result(this, '_uiBindings');
       return Marionette.normalizeUIKeys(hash, uiBindings || ui);
+    },
+  
+    // normalize the values of passed hash with the views `ui` selectors.
+    // `{foo: "@ui.bar"}`
+    normalizeUIValues: function(hash) {
+      var ui = _.result(this, 'ui');
+      var uiBindings = _.result(this, '_uiBindings');
+      return Marionette.normalizeUIValues(hash, uiBindings || ui);
     },
   
     // Configure `triggers` to forward DOM events to view
@@ -1174,36 +1244,7 @@ module.exports = Nav;
       // Configure the triggers, prevent default
       // action and stop propagation of DOM events
       _.each(triggers, function(value, key) {
-  
-        var hasOptions = _.isObject(value);
-        var eventName = hasOptions ? value.event : value;
-  
-        // build the event handler function for the DOM event
-        triggerEvents[key] = function(e) {
-  
-          // stop the event in its tracks
-          if (e) {
-            var prevent = e.preventDefault;
-            var stop = e.stopPropagation;
-  
-            var shouldPrevent = hasOptions ? value.preventDefault : prevent;
-            var shouldStop = hasOptions ? value.stopPropagation : stop;
-  
-            if (shouldPrevent && prevent) { prevent.apply(e); }
-            if (shouldStop && stop) { stop.apply(e); }
-          }
-  
-          // build the args for the event
-          var args = {
-            view: this,
-            model: this.model,
-            collection: this.collection
-          };
-  
-          // trigger the event
-          this.triggerMethod(eventName, args);
-        };
-  
+        triggerEvents[key] = this._buildViewTrigger(value);
       }, this);
   
       return triggerEvents;
@@ -1215,25 +1256,33 @@ module.exports = Nav;
       this._delegateDOMEvents(events);
       this.bindEntityEvents(this.model, this.getOption('modelEvents'));
       this.bindEntityEvents(this.collection, this.getOption('collectionEvents'));
+  
+      _.each(this._behaviors, function(behavior) {
+        behavior.bindEntityEvents(this.model, behavior.getOption('modelEvents'));
+        behavior.bindEntityEvents(this.collection, behavior.getOption('collectionEvents'));
+      }, this);
+  
       return this;
     },
   
     // internal method to delegate DOM events and triggers
-    _delegateDOMEvents: function(events) {
-      events = events || this.events;
+    _delegateDOMEvents: function(eventsArg) {
+      var events = eventsArg || this.events;
       if (_.isFunction(events)) { events = events.call(this); }
   
       // normalize ui keys
       events = this.normalizeUIKeys(events);
+      if(_.isUndefined(eventsArg)) {this.events = events;}
   
       var combinedEvents = {};
   
       // look up if this view has behavior events
       var behaviorEvents = _.result(this, 'behaviorEvents') || {};
       var triggers = this.configureTriggers();
+      var behaviorTriggers = _.result(this, 'behaviorTriggers') || {};
   
       // behavior events will be overriden by view events and or triggers
-      _.extend(combinedEvents, behaviorEvents, events, triggers);
+      _.extend(combinedEvents, behaviorEvents, events, triggers, behaviorTriggers);
   
       Backbone.View.prototype.delegateEvents.call(this, combinedEvents);
     },
@@ -1243,8 +1292,15 @@ module.exports = Nav;
     undelegateEvents: function() {
       var args = slice.call(arguments);
       Backbone.View.prototype.undelegateEvents.apply(this, args);
+  
       this.unbindEntityEvents(this.model, this.getOption('modelEvents'));
       this.unbindEntityEvents(this.collection, this.getOption('collectionEvents'));
+  
+      _.each(this._behaviors, function(behavior) {
+        behavior.unbindEntityEvents(this.model, behavior.getOption('modelEvents'));
+        behavior.unbindEntityEvents(this.collection, behavior.getOption('collectionEvents'));
+      }, this);
+  
       return this;
     },
   
@@ -1254,9 +1310,10 @@ module.exports = Nav;
     // Internal helper method to verify whether the view hasn't been destroyed
     _ensureViewIsIntact: function() {
       if (this.isDestroyed) {
-        var err = new Error('Cannot use a view thats already been destroyed.');
-        err.name = 'ViewDestroyedError';
-        throw err;
+        throw new Marionette.Error({
+          name: 'ViewDestroyedError',
+          message: 'View (cid: "' + this.cid + '") has already been destroyed and cannot be used.'
+        });
       }
     },
   
@@ -1282,12 +1339,24 @@ module.exports = Nav;
   
       // remove the view from the DOM
       this.remove();
+  
+      // Call destroy on each behavior after
+      // destroying the view.
+      // This unbinds event listeners
+      // that behaviors have registered for.
+      _.invoke(this._behaviors, 'destroy', args);
+  
       return this;
+    },
+  
+    bindUIElements: function() {
+      this._bindUIElements();
+      _.invoke(this._behaviors, this._bindUIElements);
     },
   
     // This method binds the elements specified in the "ui" hash inside the view's code with
     // the associated jQuery selectors.
-    bindUIElements: function() {
+    _bindUIElements: function() {
       if (!this.ui) { return; }
   
       // store the ui hash in _uiBindings so they can be reset later
@@ -1311,6 +1380,11 @@ module.exports = Nav;
   
     // This method unbinds the elements specified in the "ui" hash
     unbindUIElements: function() {
+      this._unbindUIElements();
+      _.invoke(this._behaviors, this._unbindUIElements);
+    },
+  
+    _unbindUIElements: function() {
       if (!this.ui || !this._uiBindings) { return; }
   
       // delete all of the existing ui bindings
@@ -1323,9 +1397,63 @@ module.exports = Nav;
       delete this._uiBindings;
     },
   
+    // Internal method to create an event handler for a given `triggerDef` like
+    // 'click:foo'
+    _buildViewTrigger: function(triggerDef) {
+      var hasOptions = _.isObject(triggerDef);
+  
+      var options = _.defaults({}, (hasOptions ? triggerDef : {}), {
+        preventDefault: true,
+        stopPropagation: true
+      });
+  
+      var eventName = hasOptions ? options.event : triggerDef;
+  
+      return function(e) {
+        if (e) {
+          if (e.preventDefault && options.preventDefault) {
+            e.preventDefault();
+          }
+  
+          if (e.stopPropagation && options.stopPropagation) {
+            e.stopPropagation();
+          }
+        }
+  
+        var args = {
+          view: this,
+          model: this.model,
+          collection: this.collection
+        };
+  
+        this.triggerMethod(eventName, args);
+      };
+    },
+  
+    setElement: function() {
+      var ret = Backbone.View.prototype.setElement.apply(this, arguments);
+  
+      // proxy behavior $el to the view's $el.
+      // This is needed because a view's $el proxy
+      // is not set until after setElement is called.
+      _.invoke(this._behaviors, 'proxyViewProperties', this);
+  
+      return ret;
+    },
+  
     // import the `triggerMethod` to trigger events with corresponding
     // methods if the method exists
-    triggerMethod: Marionette.triggerMethod,
+    triggerMethod: function() {
+      var args = arguments;
+      var triggerMethod = Marionette.triggerMethod;
+  
+      var ret = triggerMethod.apply(this, args);
+      _.each(this._behaviors, function(b) {
+        triggerMethod.apply(b, args);
+      });
+  
+      return ret;
+    },
   
     // Imports the "normalizeMethods" to transform hashes of
     // events=>function references/names to a hash of events=>function references
@@ -1411,8 +1539,10 @@ module.exports = Nav;
       }
   
       if (!template) {
-        throwError('Cannot render the template since it is null or undefined.',
-          'UndefinedTemplateError');
+        throw new Marionette.Error({
+          name: 'UndefinedTemplateError',
+          message: 'Cannot render the template since it is null or undefined.'
+        });
       }
   
       // Add in entity data and template helpers
@@ -1427,7 +1557,7 @@ module.exports = Nav;
     },
   
     // Attaches the content of a given view.
-    // This method can be overriden to optimize rendering,
+    // This method can be overridden to optimize rendering,
     // or to render in a non standard way.
     //
     // For example, using `innerHTML` instead of `$el.html`
@@ -1474,11 +1604,11 @@ module.exports = Nav;
       var initOptions = options || {};
       this.sort = _.isUndefined(initOptions.sort) ? true : initOptions.sort;
   
+      this.once('render', this._initialEvents);
       this._initChildViewStorage();
   
       Marionette.View.apply(this, arguments);
   
-      this._initialEvents();
       this.initRenderBuffer();
     },
   
@@ -1505,21 +1635,22 @@ module.exports = Nav;
   
     _triggerBeforeShowBufferedChildren: function() {
       if (this._isShown) {
-        _.invoke(this._bufferedChildren, 'triggerMethod', 'before:show');
+        _.each(this._bufferedChildren, _.partial(this._triggerMethodOnChild, 'before:show'));
       }
     },
   
     _triggerShowBufferedChildren: function() {
       if (this._isShown) {
-        _.each(this._bufferedChildren, function (child) {
-          if (_.isFunction(child.triggerMethod)) {
-            child.triggerMethod('show');
-          } else {
-            Marionette.triggerMethod.call(child, 'show');
-          }
-        });
+        _.each(this._bufferedChildren, _.partial(this._triggerMethodOnChild, 'show'));
+  
         this._bufferedChildren = [];
       }
+    },
+  
+    // Internal method for _.each loops to call `Marionette.triggerMethodOn` on
+    // a child view
+    _triggerMethodOnChild: function(event, childView) {
+      Marionette.triggerMethodOn(childView, event);
     },
   
     // Configured the initial events that the collection view
@@ -1552,14 +1683,8 @@ module.exports = Nav;
     },
   
     // Override from `Marionette.View` to trigger show on child views
-    onShowCalled: function(){
-      this.children.each(function(child){
-        if (_.isFunction(child.triggerMethod)) {
-          child.triggerMethod('show');
-        } else {
-          Marionette.triggerMethod.call(child, 'show');
-        }
-      });
+    onShowCalled: function() {
+      this.children.each(_.partial(this._triggerMethodOnChild, 'show'));
     },
   
     // Render children views. Override this method to
@@ -1643,8 +1768,12 @@ module.exports = Nav;
     // rendered empty, and then a child is added to the collection.
     destroyEmptyView: function() {
       if (this._showingEmptyView) {
+        this.triggerMethod('before:remove:empty');
+  
         this.destroyChildren();
         delete this._showingEmptyView;
+  
+        this.triggerMethod('remove:empty');
       }
     },
   
@@ -1656,7 +1785,7 @@ module.exports = Nav;
     // Render and show the emptyView. Similar to addChild method
     // but "child:added" events are not fired, and the event from
     // emptyView are not forwarded
-    addEmptyView: function(child, EmptyView){
+    addEmptyView: function(child, EmptyView) {
   
       // get the emptyViewOptions, falling back to childViewOptions
       var emptyViewOptions = this.getOption('emptyViewOptions') ||
@@ -1669,10 +1798,13 @@ module.exports = Nav;
       // build the empty view
       var view = this.buildChildView(child, EmptyView, emptyViewOptions);
   
+      // Proxy emptyView events
+      this.proxyChildEvents(view);
+  
       // trigger the 'before:show' event on `view` if the collection view
       // has already been shown
-      if (this._isShown){
-        this.triggerMethod.call(view, 'before:show');
+      if (this._isShown) {
+        Marionette.triggerMethodOn(view, 'before:show');
       }
   
       // Store the `emptyView` like a `childView` so we can properly
@@ -1684,8 +1816,8 @@ module.exports = Nav;
   
       // call the 'show' method if the collection view
       // has already been shown
-      if (this._isShown){
-        this.triggerMethod.call(view, 'show');
+      if (this._isShown) {
+        Marionette.triggerMethodOn(view, 'show');
       }
     },
   
@@ -1699,7 +1831,10 @@ module.exports = Nav;
       var childView = this.getOption('childView');
   
       if (!childView) {
-        throwError('A "childView" must be specified', 'NoChildViewError');
+        throw new Marionette.Error({
+          name: 'NoChildViewError',
+          message: 'A "childView" must be specified'
+        });
       }
   
       return childView;
@@ -1767,12 +1902,8 @@ module.exports = Nav;
       this.children.add(view);
       this.renderChildView(view, index);
   
-      if (this._isShown && !this.isBuffering){
-        if (_.isFunction(view.triggerMethod)) {
-          view.triggerMethod('show');
-        } else {
-          Marionette.triggerMethod.call(view, 'show');
-        }
+      if (this._isShown && !this.isBuffering) {
+        Marionette.triggerMethodOn(view, 'show');
       }
   
       this.triggerMethod('add:child', view);
@@ -1815,7 +1946,7 @@ module.exports = Nav;
     },
   
     // check if the collection is empty
-    isEmpty: function(collection) {
+    isEmpty: function() {
       return !this.collection || this.collection.length === 0;
     },
   
@@ -1954,18 +2085,16 @@ module.exports = Nav;
   
       // Bind only after composite view is rendered to avoid adding child views
       // to nonexistent childViewContainer
-      this.once('render', function() {
-        if (this.collection) {
-          this.listenTo(this.collection, 'add', this._onCollectionAdd);
-          this.listenTo(this.collection, 'remove', this._onCollectionRemove);
-          this.listenTo(this.collection, 'reset', this._renderChildren);
   
-          if (this.sort) {
-            this.listenTo(this.collection, 'sort', this._sortViews);
-          }
+      if (this.collection) {
+        this.listenTo(this.collection, 'add', this._onCollectionAdd);
+        this.listenTo(this.collection, 'remove', this._onCollectionRemove);
+        this.listenTo(this.collection, 'reset', this._renderChildren);
+  
+        if (this.sort) {
+          this.listenTo(this.collection, 'sort', this._sortViews);
         }
-      });
-  
+      }
     },
   
     // Retrieve the `childView` to be used when rendering each of
@@ -1976,7 +2105,10 @@ module.exports = Nav;
       var childView = this.getOption('childView') || this.constructor;
   
       if (!childView) {
-        throwError('A "childView" must be specified', 'NoChildViewError');
+        throw new Marionette.Error({
+          name: 'NoChildViewError',
+          message: 'A "childView" must be specified'
+        });
       }
   
       return childView;
@@ -2039,7 +2171,7 @@ module.exports = Nav;
     },
   
     // Attaches the content of the root.
-    // This method can be overriden to optimize rendering,
+    // This method can be overridden to optimize rendering,
     // or to render in a non standard way.
     //
     // For example, using `innerHTML` instead of `$el.html`
@@ -2090,8 +2222,10 @@ module.exports = Nav;
         }
   
         if (container.length <= 0) {
-          throwError('The specified "childViewContainer" was not found: ' +
-            containerView.childViewContainer, 'ChildViewContainerMissingError');
+          throw new Marionette.Error({
+            name: 'ChildViewContainerMissingError',
+            message: 'The specified "childViewContainer" was not found: ' + containerView.childViewContainer
+          });
         }
   
       } else {
@@ -2163,7 +2297,6 @@ module.exports = Nav;
   
     // Add a single region, by name, to the layoutView
     addRegion: function(name, definition) {
-      this.triggerMethod('before:region:add', name);
       var regions = {};
       regions[name] = definition;
       return this._buildRegions(regions)[name];
@@ -2177,7 +2310,6 @@ module.exports = Nav;
   
     // Remove a single region from the LayoutView, by name
     removeRegion: function(name) {
-      this.triggerMethod('before:region:remove', name);
       delete this.regions[name];
       return this.regionManager.removeRegion(name);
     },
@@ -2228,6 +2360,10 @@ module.exports = Nav;
   
       _.extend(regions, regionOptions);
   
+      // Normalize region selectors hash to allow
+      // a user to use the @ui. syntax.
+      regions = this.normalizeUIValues(regions);
+  
       this.addRegions(regions);
     },
   
@@ -2240,8 +2376,8 @@ module.exports = Nav;
       });
     },
   
-    // Enable easy overiding of the default `RegionManager`
-    // for customized region interactions and buisness specific
+    // Enable easy overriding of the default `RegionManager`
+    // for customized region interactions and business specific
     // view logic for better control over single regions.
     getRegionManager: function() {
       return new Marionette.RegionManager();
@@ -2311,6 +2447,11 @@ module.exports = Nav;
         this.stopListening();
       },
   
+      proxyViewProperties: function (view) {
+        this.$el = view.$el;
+        this.el = view.el;
+      },
+  
       // import the `triggerMethod` to trigger events with corresponding
       // methods if the method exists
       triggerMethod: Marionette.triggerMethod,
@@ -2327,19 +2468,19 @@ module.exports = Nav;
   
     // Borrow Backbones extend implementation
     // this allows us to setup a proper
-    // inheritence pattern that follow in suite
+    // inheritance pattern that follows suit
     // with the rest of Marionette views.
     Behavior.extend = Marionette.extend;
   
     return Behavior;
   })(_, Backbone);
   
-  /* jshint maxlen: 143, nonew: false */
+  /* jshint maxlen: 143 */
   // Marionette.Behaviors
   // --------
   
   // Behaviors is a utility class that takes care of
-  // glueing your behavior instances to their given View.
+  // gluing your behavior instances to their given View.
   // The most important part of this class is that you
   // **MUST** override the class level behaviorsLookup
   // method for things to work properly.
@@ -2347,6 +2488,11 @@ module.exports = Nav;
   Marionette.Behaviors = (function(Marionette, _) {
   
     function Behaviors(view, behaviors) {
+  
+      if (!_.isObject(view.behaviors)) {
+        return {};
+      }
+  
       // Behaviors defined on a view can be a flat object literal
       // or it can be a function that returns an object.
       behaviors = Behaviors.parseBehaviors(view, behaviors || _.result(view, 'behaviors'));
@@ -2355,76 +2501,13 @@ module.exports = Nav;
       // calling the methods first on each behavior
       // and then eventually calling the method on the view.
       Behaviors.wrap(view, behaviors, _.keys(methods));
+      return behaviors;
     }
   
     var methods = {
-      setElement: function(setElement, behaviors) {
-        setElement.apply(this, _.tail(arguments, 2));
-  
-        // proxy behavior $el to the view's $el.
-        // This is needed because a view's $el proxy
-        // is not set until after setElement is called.
-        _.each(behaviors, function(b) {
-          b.$el = this.$el;
-          b.el = this.el;
-        }, this);
-  
-        return this;
-      },
-  
-      destroy: function(destroy, behaviors) {
-        var args = _.tail(arguments, 2);
-        destroy.apply(this, args);
-  
-        // Call destroy on each behavior after
-        // destroying the view.
-        // This unbinds event listeners
-        // that behaviors have registerd for.
-        _.invoke(behaviors, 'destroy', args);
-        return this;
-      },
-  
-      bindUIElements: function(bindUIElements, behaviors) {
-        bindUIElements.apply(this);
-        _.invoke(behaviors, bindUIElements);
-      },
-  
-      unbindUIElements: function(unbindUIElements, behaviors) {
-        unbindUIElements.apply(this);
-        _.invoke(behaviors, unbindUIElements);
-      },
-  
-      triggerMethod: function(triggerMethod, behaviors) {
-        var args = _.tail(arguments, 2);
-        triggerMethod.apply(this, args);
-  
-        _.each(behaviors, function(b) {
-          triggerMethod.apply(b, args);
-        });
-      },
-  
-      delegateEvents: function(delegateEvents, behaviors) {
-        var args = _.tail(arguments, 2);
-        delegateEvents.apply(this, args);
-  
-        _.each(behaviors, function(b) {
-          Marionette.bindEntityEvents(b, this.model, Marionette.getOption(b, 'modelEvents'));
-          Marionette.bindEntityEvents(b, this.collection, Marionette.getOption(b, 'collectionEvents'));
-        }, this);
-  
-        return this;
-      },
-  
-      undelegateEvents: function(undelegateEvents, behaviors) {
-        var args = _.tail(arguments, 2);
-        undelegateEvents.apply(this, args);
-  
-        _.each(behaviors, function(b) {
-          Marionette.unbindEntityEvents(b, this.model, Marionette.getOption(b, 'modelEvents'));
-          Marionette.unbindEntityEvents(b, this.collection, Marionette.getOption(b, 'collectionEvents'));
-        }, this);
-  
-        return this;
+      behaviorTriggers: function(behaviorTriggers, behaviors) {
+        var triggerBuilder = new BehaviorTriggersBuilder(this, behaviors);
+        return triggerBuilder.buildBehaviorTriggers();
       },
   
       behaviorEvents: function(behaviorEvents, behaviors) {
@@ -2479,9 +2562,10 @@ module.exports = Nav;
       // }
       // ```
       behaviorsLookup: function() {
-        throw new Error('You must define where your behaviors are stored.' +
-          'See https://github.com/marionettejs/backbone.marionette' +
-          '/blob/master/docs/marionette.behaviors.md#behaviorslookup');
+        throw new Marionette.Error({
+          message: 'You must define where your behaviors are stored.',
+          url: 'marionette.behaviors.html#behaviorslookup'
+        });
       },
   
       // Takes care of getting the behavior class
@@ -2520,6 +2604,44 @@ module.exports = Nav;
         _.each(methodNames, function(methodName) {
           view[methodName] = _.partial(methods[methodName], view[methodName], behaviors);
         });
+      }
+    });
+  
+    // Class to build handlers for `triggers` on behaviors
+    // for views
+    function BehaviorTriggersBuilder(view, behaviors) {
+      this._view      = view;
+      this._viewUI    = _.result(view, 'ui');
+      this._behaviors = behaviors;
+      this._triggers  = {};
+    }
+  
+    _.extend(BehaviorTriggersBuilder.prototype, {
+      // Main method to build the triggers hash with event keys and handlers
+      buildBehaviorTriggers: function() {
+        _.each(this._behaviors, this._buildTriggerHandlersForBehavior, this);
+        return this._triggers;
+      },
+  
+      // Internal method to build all trigger handlers for a given behavior
+      _buildTriggerHandlersForBehavior: function(behavior, i) {
+        var ui = _.extend({}, this._viewUI, _.result(behavior, 'ui'));
+        var triggersHash = _.clone(_.result(behavior, 'triggers')) || {};
+  
+        triggersHash = Marionette.normalizeUIKeys(triggersHash, ui);
+  
+        _.each(triggersHash, _.partial(this._setHandlerForBehavior, behavior, i), this);
+      },
+  
+      // Internal method to create and assign the trigger handler for a given
+      // behavior
+      _setHandlerForBehavior: function(behavior, i, eventName, trigger) {
+        // Unique identifier for the `this._triggers` hash
+        var triggerKey = trigger.replace(/^\S+/, function(triggerName) {
+          return triggerName + '.' + 'behaviortriggers' + i;
+        });
+  
+        this._triggers[triggerKey] = this._view._buildViewTrigger(eventName);
       }
     });
   
@@ -2599,7 +2721,7 @@ module.exports = Nav;
       var method = controller[methodName];
   
       if (!method) {
-        throwError('Method "' + methodName + '" was not found on the controller');
+        throw new Marionette.Error('Method "' + methodName + '" was not found on the controller');
       }
   
       this.route(route, methodName, _.bind(method, controller));
@@ -2616,14 +2738,20 @@ module.exports = Nav;
   // Stores and starts up `Region` objects, includes an
   // event aggregator as `app.vent`
   Marionette.Application = function(options) {
+    this.options = options;
     this._initializeRegions(options);
     this._initCallbacks = new Marionette.Callbacks();
     this.submodules = {};
     _.extend(this, options);
     this._initChannel();
+    this.initialize.apply(this, arguments);
   };
   
   _.extend(Marionette.Application.prototype, Backbone.Events, {
+    // Initialize is an empty function by default. Override it with your own
+    // initialization logic.
+    initialize: function() {},
+  
     // Command execution, facilitated by Backbone.Wreqr.Commands
     execute: function() {
       this.commands.execute.apply(this.commands, arguments);
@@ -2793,9 +2921,6 @@ module.exports = Nav;
     // within a module.
     this.app = app;
   
-    // By default modules start with their parents.
-    this.startWithParent = true;
-  
     if (_.isFunction(this.initialize)) {
       this.initialize(moduleName, app, this.options);
     }
@@ -2806,6 +2931,9 @@ module.exports = Nav;
   // Extend the Module prototype with events / listenTo, so that the module
   // can be used as an event aggregator or pub/sub.
   _.extend(Marionette.Module.prototype, Backbone.Events, {
+  
+    // By default modules start with their parents.
+    startWithParent: true,
   
     // Initialize is an empty function by default. Override it with your own
     // initialization logic when extending Marionette.Module.
@@ -3046,7 +3174,7 @@ module.exports = Nav;
 },{"backbone":8,"backbone.babysitter":5,"backbone.wreqr":6,"underscore":7}],5:[function(require,module,exports){
 // Backbone.BabySitter
 // -------------------
-// v0.1.4
+// v0.1.5
 //
 // Copyright (c)2014 Derick Bailey, Muted Solutions, LLC.
 // Distributed under MIT license
@@ -3224,7 +3352,7 @@ module.exports = Nav;
   })(Backbone, _);
   
 
-  Backbone.ChildViewContainer.VERSION = '0.1.4';
+  Backbone.ChildViewContainer.VERSION = '0.1.5';
 
   Backbone.ChildViewContainer.noConflict = function () {
     Backbone.ChildViewContainer = previousChildViewContainer;
@@ -9783,34 +9911,53 @@ function merge_text_nodes( jsonml ) {
 
 },{}],12:[function(require,module,exports){
 var Backbone = require('backbone');
+var IndexView = require('./views/home');
+var InterestView = require('./views/interests');
 
 
 var Controller = Backbone.Marionette.Controller.extend({
+  initialize: function(options) {
+    this.app = options.app;
+    this.collection = options.collection;
+  },
+
   home: function() {
-    var links = Backbone.Wreqr.radio.channel('link');
-    links.vent.trigger('clicked', 'home');
+    this.app.main.show(new IndexView())
+    this._setActive('');
   },
 
   interests: function() {
-    var links = Backbone.Wreqr.radio.channel('link');
-    links.vent.trigger('clicked', 'interests');
+    this.app.main.show(new InterestView())
+    this._setActive('interests');
+  },
+
+  _setActive: function(href) {
+    var newActive = this.collection.findWhere({href: href});
+    var oldActive = this.collection.findWhere({active: true});
+
+    if (oldActive.get('href') != newActive.get('href')) {
+      newActive.set('active', true);
+      oldActive.set('active', false);
+    }
   }
 });
 
 
 var Router = Backbone.Marionette.AppRouter.extend({
+  initialize: function(options) {
+    this.controller = new Controller(options);
+  },
+
   appRoutes: {
     '': 'home',
     'interests': 'interests'
-  },
-
-  controller: new Controller()
+  }
 });
 
 
 module.exports = Router;
 
-},{"backbone":8}],13:[function(require,module,exports){
+},{"./views/home":18,"./views/interests":19,"backbone":8}],13:[function(require,module,exports){
 module.exports = function(obj){
 var __t,__p='',__j=Array.prototype.join,print=function(){__p+=__j.call(arguments,'');};
 with(obj||{}){
@@ -9921,9 +10068,6 @@ var Backbone = require('backbone');
 
 
 var NavItem = Backbone.Marionette.ItemView.extend({
-  events: {
-    'click @ui.link': 'navigate'
-  },
   modelEvents: {
     'change:active': 'render'
   },
@@ -9934,14 +10078,6 @@ var NavItem = Backbone.Marionette.ItemView.extend({
 
   tagName: 'li',
   template: require('../templates/nav_item.html'),
-
-  navigate: function(event) {
-    event.preventDefault();
-    var links = Backbone.Wreqr.radio.channel('link');
-    
-    var href = this.model.get('href') || 'home';
-    links.vent.trigger('clicked', href);
-  },
 
   onRender: function() {
     if (this.model.get('active')) {
@@ -9961,30 +10097,7 @@ var NavView = Backbone.Marionette.CompositeView.extend({
   className: 'inner',
   tagName: 'nav',
 
-  template: require('../templates/nav.html'),
-
-  onShow: function() {
-    var links = Backbone.Wreqr.radio.channel('link');
-    links.vent.on('clicked', this.setHighlight.bind(this));
-  },
-
-  /* Sets the highlighted navigation option */
-  setHighlight: function(link) {
-    var navs = {
-      home: '',
-      interests: 'interests'
-    };
-
-    this.collection.each(function(model) {
-      var href = model.get('href') || 'home';
-      if (href === link) {
-        model.set('active', true);
-      }
-      else {
-        model.set('active', false);
-      }
-    });
-  }
+  template: require('../templates/nav.html')
 });
 
 
@@ -10023,6 +10136,8 @@ var process = module.exports = {};
 process.nextTick = (function () {
     var canSetImmediate = typeof window !== 'undefined'
     && window.setImmediate;
+    var canMutationObserver = typeof window !== 'undefined'
+    && window.MutationObserver;
     var canPost = typeof window !== 'undefined'
     && window.postMessage && window.addEventListener
     ;
@@ -10031,8 +10146,29 @@ process.nextTick = (function () {
         return function (f) { return window.setImmediate(f) };
     }
 
+    var queue = [];
+
+    if (canMutationObserver) {
+        var hiddenDiv = document.createElement("div");
+        var observer = new MutationObserver(function () {
+            var queueList = queue.slice();
+            queue.length = 0;
+            queueList.forEach(function (fn) {
+                fn();
+            });
+        });
+
+        observer.observe(hiddenDiv, { attributes: true });
+
+        return function nextTick(fn) {
+            if (!queue.length) {
+                hiddenDiv.setAttribute('yes', 'no');
+            }
+            queue.push(fn);
+        };
+    }
+
     if (canPost) {
-        var queue = [];
         window.addEventListener('message', function (ev) {
             var source = ev.source;
             if ((source === window || source === null) && ev.data === 'process-tick') {
@@ -10072,7 +10208,7 @@ process.emit = noop;
 
 process.binding = function (name) {
     throw new Error('process.binding is not supported');
-}
+};
 
 // TODO(shtylman)
 process.cwd = function () { return '/' };

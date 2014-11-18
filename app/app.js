@@ -20,32 +20,16 @@ App.addInitializer(function(options) {
   };
 
   this.addRegions(regions);
-  var router = new Router();
 
   var nav = new Nav([
     {name: 'Home', active: true, href: ''},
     {name: 'Interests', href: 'interests'}
   ]);
+
+  var router = new Router({app: this, collection: nav});
   var navView = new NavView({collection: nav});
 
   this.navbar.show(navView);
-
-  var links = Backbone.Wreqr.radio.channel('link');
-
-  var app = this;
-  links.vent.on('clicked', function(link) {
-    var views = {
-      home: require('./views/home'),
-      interests: require('./views/interests')
-    };
-    var navs = {
-      home: '',
-      interests: 'interests'
-    };
-    Backbone.history.navigate(navs[link]);
-
-    app.main.show(new views[link]())
-  });
 
   Backbone.history.start();
 });
