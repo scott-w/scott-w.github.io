@@ -13,6 +13,12 @@ var Router = require('./router');
 var App = new Backbone.Marionette.Application();
 
 
+/** Our base initializer. The role of this is to get the Router up and running,
+* so it can render our views as soon as possible.
+* We want to avoid as much view management as possible here, otherwise we have
+* a convoluted process to clean up what happens in the router and what happens
+* at the initializer.
+*/
 App.addInitializer(function(options) {
   var regions = {
     title: 'title',
@@ -9915,22 +9921,41 @@ var IndexView = require('./views/home');
 var InterestView = require('./views/interests');
 
 
+/** The main logic that handles movement across screens. The application
+* initializer should delegate most of the work here as soon as possible, and let
+* the individual views manage themselves.
+*/
 var Controller = Backbone.Marionette.Controller.extend({
+
+  /** We need the app and collection in options here so we can effectively
+  * manage the rendering of the whole page. Using this method means we don't
+  * need to manage the Backbone history ourselves because the browser is going
+  * to do it all for us.
+  */
   initialize: function(options) {
     this.app = options.app;
     this.collection = options.collection;
   },
 
+  /** Displays the homepage.
+  */
   home: function() {
     this.app.main.show(new IndexView())
     this._setActive('');
   },
 
+  /** Displays the list of interests.
+  */
   interests: function() {
     this.app.main.show(new InterestView())
     this._setActive('interests');
   },
 
+  /** The main driver function for switching pages. This works by simply
+  * flipping the active flag in the collection, if necessary. Because the
+  * collection is wired up to the NavView, it will re-render itself
+  * automatically.
+  */
   _setActive: function(href) {
     var newActive = this.collection.findWhere({href: href});
     var oldActive = this.collection.findWhere({active: true});
@@ -9944,6 +9969,10 @@ var Controller = Backbone.Marionette.Controller.extend({
 
 
 var Router = Backbone.Marionette.AppRouter.extend({
+  /** We need this so we can feed the app and collection options through to the
+  * controller. We could also expose the controller directly to the application
+  * and manage it there if we wished.
+  */
   initialize: function(options) {
     this.controller = new Controller(options);
   },
@@ -9961,7 +9990,7 @@ module.exports = Router;
 module.exports = function(obj){
 var __t,__p='',__j=Array.prototype.join,print=function(){__p+=__j.call(arguments,'');};
 with(obj||{}){
-__p+='<h1 class="cover-heading">My Homepage</h1>\n<p class="lead">\n  My name is Scott. I am a software developer based in Newcastle,\n  UK.\n</p>\n<p class="lead">\n  I am the lead developer at\n  <a href="https://www.mypebble.co.uk">Pebble</a>.\n  I can be reached through my \n  <a href="mailto:scott.walton@mypebble.co.uk">work email</a>.\n</p>\n<p class="lead">\n  I am also somewhat active on\n  <a href="https://github.com/scott-w">Github</a>.\n  <a href="https://github.com/mypebble">Check out the projects\n    that we maintain</a>.\n</p>\n';
+__p+='<h1 class="cover-heading">My Homepage</h1>\n<p class="lead">\n  My name is Scott. I am a software developer based in Newcastle,\n  UK.\n</p>\n<p class="lead">\n  I am the lead developer at\n  <a href="https://www.mypebble.co.uk">Pebble</a>.\n  I can be reached through my\n  <a href="mailto:scott.walton@mypebble.co.uk">work email</a>.\n</p>\n<p class="lead">\n  I am also somewhat active on\n  <a href="https://github.com/scott-w">Github</a>.\n  <a href="https://github.com/mypebble">Also check out the projects\n    that Pebble maintains</a>.\n</p>\n\n<p class="lead">\n  The source for this page can be found at\n  <a href="https://github.com/scott-w/scott-w.github.io">its Github repo</a>.\n</p>\n';
 }
 return __p;
 };
@@ -10035,8 +10064,10 @@ var Item = Backbone.Marionette.ItemView.extend({
   }
 });
 
+
 var InterestsView = Backbone.Marionette.CompositeView.extend({
   initialize: function() {
+    // This should be in a separate file
     this.collection = new Interests([
       {
         text: 'Cycling - I recently completed the ' +
@@ -10079,7 +10110,10 @@ var NavItem = Backbone.Marionette.ItemView.extend({
   tagName: 'li',
   template: require('../templates/nav_item.html'),
 
-  onRender: function() {
+  /** We need to use this hook because className and the attributes hash are
+  * both calculated once: on DOM creation.
+  */
+  onBeforeRender: function() {
     if (this.model.get('active')) {
       this.$el.addClass('active');
     }

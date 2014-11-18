@@ -12,6 +12,12 @@ var Router = require('./router');
 var App = new Backbone.Marionette.Application();
 
 
+/** Our base initializer. The role of this is to get the Router up and running,
+* so it can render our views as soon as possible.
+* We want to avoid as much view management as possible here, otherwise we have
+* a convoluted process to clean up what happens in the router and what happens
+* at the initializer.
+*/
 App.addInitializer(function(options) {
   var regions = {
     title: 'title',

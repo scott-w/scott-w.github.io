@@ -13,8 +13,10 @@ var Item = Backbone.Marionette.ItemView.extend({
   }
 });
 
+
 var InterestsView = Backbone.Marionette.CompositeView.extend({
   initialize: function() {
+    // This should be in a separate file
     this.collection = new Interests([
       {
         text: 'Cycling - I recently completed the ' +

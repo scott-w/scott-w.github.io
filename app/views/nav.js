@@ -13,7 +13,10 @@ var NavItem = Backbone.Marionette.ItemView.extend({
   tagName: 'li',
   template: require('../templates/nav_item.html'),
 
-  onRender: function() {
+  /** We need to use this hook because className and the attributes hash are
+  * both calculated once: on DOM creation.
+  */
+  onBeforeRender: function() {
     if (this.model.get('active')) {
       this.$el.addClass('active');
     }
