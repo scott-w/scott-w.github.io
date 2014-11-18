@@ -20,3 +20,6 @@ Understanding the Code
 The best way to learn the code is to start at `app/app.js` and read the documentation comments.
 The initializer sets everything up, with some boilerplate. You can follow the `require()` calls
 to each file to get a better idea of how it works.
+
+The next thing to look at is `app/router.js` of which the `Controller` contains most of the logic
+for displaying regions and setting up minor rendering.
