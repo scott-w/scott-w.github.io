@@ -43,17 +43,7 @@ App.addInitializer(function(options) {
 
 App.start();
 
-},{"./collections/nav":3,"./router":12,"./views/nav":20,"backbone":8,"backbone.marionette":4,"underscore":11}],2:[function(require,module,exports){
-var Backbone = require('backbone');
-
-
-var Interests = Backbone.Collection.extend({
-});
-
-
-module.exports = Interests;
-
-},{"backbone":8}],3:[function(require,module,exports){
+},{"./collections/nav":2,"./router":12,"./views/nav":19,"backbone":8,"backbone.marionette":4,"underscore":11}],2:[function(require,module,exports){
 var Backbone = require('backbone');
 
 
@@ -61,6 +51,27 @@ var Nav = Backbone.Collection.extend({
 });
 
 module.exports = Nav;
+
+},{"backbone":8}],3:[function(require,module,exports){
+var Backbone = require('backbone');
+
+
+var _url = 'https://api.github.com/repos/scott-w/scott-w.github.io/contents/';
+
+
+var Interests = Backbone.Model.extend({
+  url: _url + 'static/data/interests.md',
+
+  parse: function(response, options) {
+    debugger;
+    return {
+      text: btoa(response.content)
+    };
+  }
+});
+
+
+module.exports = Interests;
 
 },{"backbone":8}],4:[function(require,module,exports){
 // MarionetteJS (Backbone.Marionette)
@@ -8498,7 +8509,7 @@ function merge_text_nodes( jsonml ) {
   }
 } )() );
 
-},{"util":24}],11:[function(require,module,exports){
+},{"util":23}],11:[function(require,module,exports){
 //     Underscore.js 1.7.0
 //     http://underscorejs.org
 //     (c) 2009-2014 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -9919,6 +9930,7 @@ function merge_text_nodes( jsonml ) {
 var Backbone = require('backbone');
 var IndexView = require('./views/home');
 var InterestView = require('./views/interests');
+var Interests = require('./models/interests');
 
 
 /** The main logic that handles movement across screens. The application
@@ -9933,21 +9945,25 @@ var Controller = Backbone.Marionette.Controller.extend({
   * to do it all for us.
   */
   initialize: function(options) {
-    this.app = options.app;
+    this.options = {
+      app: options.app,
+      interests: new Interests({}, {parse: true})
+    };
+    this.options.interests.fetch();
     this.collection = options.collection;
   },
 
   /** Displays the homepage.
   */
   home: function() {
-    this.app.main.show(new IndexView())
+    this.options.app.main.show(new IndexView())
     this._setActive('');
   },
 
   /** Displays the list of interests.
   */
   interests: function() {
-    this.app.main.show(new InterestView())
+    this.options.app.main.show(new InterestView())
     this._setActive('interests');
   },
 
@@ -9986,7 +10002,7 @@ var Router = Backbone.Marionette.AppRouter.extend({
 
 module.exports = Router;
 
-},{"./views/home":18,"./views/interests":19,"backbone":8}],13:[function(require,module,exports){
+},{"./models/interests":3,"./views/home":17,"./views/interests":18,"backbone":8}],13:[function(require,module,exports){
 module.exports = function(obj){
 var __t,__p='',__j=Array.prototype.join,print=function(){__p+=__j.call(arguments,'');};
 with(obj||{}){
@@ -9999,9 +10015,9 @@ return __p;
 module.exports = function(obj){
 var __t,__p='',__j=Array.prototype.join,print=function(){__p+=__j.call(arguments,'');};
 with(obj||{}){
-__p+=''+
+__p+='<p class="lead">My interests include:</p>\n<ul class="list-unstyled">'+
 ((__t=( markdown(text) ))==null?'':__t)+
-'\n';
+'</ul>\n';
 }
 return __p;
 };
@@ -10010,21 +10026,12 @@ return __p;
 module.exports = function(obj){
 var __t,__p='',__j=Array.prototype.join,print=function(){__p+=__j.call(arguments,'');};
 with(obj||{}){
-__p+='<p class="lead">My interests include:</p>\n<ul class="list-unstyled"></ul>\n';
-}
-return __p;
-};
-
-},{}],16:[function(require,module,exports){
-module.exports = function(obj){
-var __t,__p='',__j=Array.prototype.join,print=function(){__p+=__j.call(arguments,'');};
-with(obj||{}){
 __p+='<h3 class="masthead-brand">Scott Walton</h3>\n<ul class="masthead-nav"></ul>\n';
 }
 return __p;
 };
 
-},{}],17:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 module.exports = function(obj){
 var __t,__p='',__j=Array.prototype.join,print=function(){__p+=__j.call(arguments,'');};
 with(obj||{}){
@@ -10037,7 +10044,7 @@ __p+='<a href="#'+
 return __p;
 };
 
-},{}],18:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 var Backbone = require('backbone');
 
 
@@ -10048,16 +10055,13 @@ var HomeView = Backbone.Marionette.ItemView.extend({
 
 module.exports = HomeView;
 
-},{"../templates/home.html":13,"backbone":8}],19:[function(require,module,exports){
+},{"../templates/home.html":13,"backbone":8}],18:[function(require,module,exports){
 var Backbone = require('backbone');
 var markdown = require('markdown').markdown;
 
-var Interests = require('../collections/interests');
 
-
-var Item = Backbone.Marionette.ItemView.extend({
-  tagName: 'li',
-  template: require('../templates/interest_item.html'),
+var InterestsView = Backbone.Marionette.LayoutView.extend({
+  template: require('../templates/interests.html'),
 
   templateHelpers: {
     markdown: markdown.toHTML
@@ -10065,36 +10069,9 @@ var Item = Backbone.Marionette.ItemView.extend({
 });
 
 
-var InterestsView = Backbone.Marionette.CompositeView.extend({
-  initialize: function() {
-    // This should be in a separate file
-    this.collection = new Interests([
-      {
-        text: 'Cycling - I recently completed the ' +
-        '[C2C](https://justgiving.com/pebble-c2c14)'
-      },
-      {
-        text: 'Building JavaScript apps'
-      },
-      {
-        text: 'Python/Django web apps'
-      },
-      {
-        text: "I am currently reading Robert Jordan's Wheel of Time series"
-      }
-    ]);
-  },
-
-  childView: Item,
-  childViewContainer: 'ul',
-
-  template: require('../templates/interests.html')
-});
-
-
 module.exports = InterestsView;
 
-},{"../collections/interests":2,"../templates/interest_item.html":14,"../templates/interests.html":15,"backbone":8,"markdown":9}],20:[function(require,module,exports){
+},{"../templates/interests.html":14,"backbone":8,"markdown":9}],19:[function(require,module,exports){
 var Backbone = require('backbone');
 
 
@@ -10137,7 +10114,7 @@ var NavView = Backbone.Marionette.CompositeView.extend({
 
 module.exports = NavView;
 
-},{"../templates/nav.html":16,"../templates/nav_item.html":17,"backbone":8}],21:[function(require,module,exports){
+},{"../templates/nav.html":15,"../templates/nav_item.html":16,"backbone":8}],20:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -10162,7 +10139,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],22:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -10250,14 +10227,14 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}],23:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],24:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -10847,4 +10824,4 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":23,"_process":22,"inherits":21}]},{},[1]);
+},{"./support/isBuffer":22,"_process":21,"inherits":20}]},{},[1]);

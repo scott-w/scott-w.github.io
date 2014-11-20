@@ -1,6 +1,7 @@
 var Backbone = require('backbone');
 var IndexView = require('./views/home');
 var InterestView = require('./views/interests');
+var Interests = require('./models/interests');
 
 
 /** The main logic that handles movement across screens. The application
@@ -15,21 +16,25 @@ var Controller = Backbone.Marionette.Controller.extend({
   * to do it all for us.
   */
   initialize: function(options) {
-    this.app = options.app;
+    this.options = {
+      app: options.app,
+      interests: new Interests({}, {parse: true})
+    };
+    this.options.interests.fetch();
     this.collection = options.collection;
   },
 
   /** Displays the homepage.
   */
   home: function() {
-    this.app.main.show(new IndexView())
+    this.options.app.main.show(new IndexView())
     this._setActive('');
   },
 
   /** Displays the list of interests.
   */
   interests: function() {
-    this.app.main.show(new InterestView())
+    this.options.app.main.show(new InterestView())
     this._setActive('interests');
   },
 
