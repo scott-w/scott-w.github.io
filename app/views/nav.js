@@ -1,6 +1,9 @@
 var Backbone = require('backbone');
 
 
+/** Note the modelEvents, so we can change the underlying model in the router
+* and only the affected items will be re-rendered
+*/
 var NavItem = Backbone.Marionette.ItemView.extend({
   modelEvents: {
     'change:active': 'render'
@@ -27,6 +30,8 @@ var NavItem = Backbone.Marionette.ItemView.extend({
 });
 
 
+/** Pretty basic CompositeView for the navigation
+*/
 var NavView = Backbone.Marionette.CompositeView.extend({
   childView: NavItem,
   childViewContainer: 'ul',
