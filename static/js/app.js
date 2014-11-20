@@ -59,13 +59,21 @@ var Backbone = require('backbone');
 var _url = 'https://api.github.com/repos/scott-w/scott-w.github.io/contents/';
 
 
+/** The interests model pulls the list of my interests from a specified markdown
+* file. Using this strategy makes it easier for me to update the data, without
+* delving into the source code itself to modify everything.
+*/
 var Interests = Backbone.Model.extend({
   url: _url + 'static/data/interests.md',
 
+  /** Take the github response and just take the content. The Github API returns
+  * the content as base64, so use the atob function to get the markdown string
+  * back.
+  */
   parse: function(response, options) {
-    debugger;
+    var content = response.content;
     return {
-      text: btoa(response.content)
+      text: content ? atob(response.content) : ''
     };
   }
 });
@@ -9949,6 +9957,9 @@ var Controller = Backbone.Marionette.Controller.extend({
       app: options.app,
       interests: new Interests({}, {parse: true})
     };
+    /* Run the fetch in the initalize, so if the user hits the homepage, the
+    * data is pre-cached and ready to display immediately.
+    */
     this.options.interests.fetch();
     this.collection = options.collection;
   },
@@ -9960,17 +9971,21 @@ var Controller = Backbone.Marionette.Controller.extend({
     this._setActive('');
   },
 
-  /** Displays the list of interests.
+  /** Displays the list of interests. The interest model is pre-fetched from
+  * the initialize method, so most of the time, there will be little to no
+  * delay in rendering.
   */
   interests: function() {
-    this.options.app.main.show(new InterestView())
+    var view = new InterestView({
+      model: this.options.interests
+    });
+    this.options.app.main.show(view);
     this._setActive('interests');
   },
 
-  /** The main driver function for switching pages. This works by simply
-  * flipping the active flag in the collection, if necessary. Because the
-  * collection is wired up to the NavView, it will re-render itself
-  * automatically.
+  /** Set the active tab in the navigation list at the top of the screen.
+  * This works by updating the shared Backbone model, which will trigger the
+  * NavigationView to re-render its own list.
   */
   _setActive: function(href) {
     var newActive = this.collection.findWhere({href: href});
@@ -10015,9 +10030,9 @@ return __p;
 module.exports = function(obj){
 var __t,__p='',__j=Array.prototype.join,print=function(){__p+=__j.call(arguments,'');};
 with(obj||{}){
-__p+='<p class="lead">My interests include:</p>\n<ul class="list-unstyled">'+
+__p+='<p class="lead">My interests include:</p>\n<div class="interest-hook">'+
 ((__t=( markdown(text) ))==null?'':__t)+
-'</ul>\n';
+'</div>\n';
 }
 return __p;
 };
@@ -10060,11 +10075,43 @@ var Backbone = require('backbone');
 var markdown = require('markdown').markdown;
 
 
+/** We render the model if necessary. We use a LayoutView here out of habit.
+* Making everything a LayoutView gives us access to the region hash if we want
+* to use it later.
+*/
 var InterestsView = Backbone.Marionette.LayoutView.extend({
   template: require('../templates/interests.html'),
 
+  /** Pre-save the jQuery selector.
+  */
+  ui: {
+    interests: '.interest-hook'
+  },
+
+  /** Whenever the fetch completes, re-render this view.
+  */
+  modelEvents: {
+    sync: 'render'
+  },
+
   templateHelpers: {
-    markdown: markdown.toHTML
+    /** Lets us access a markdown() function in the template itself.
+    * This is the meat of the view, as the model attribute is just a markdown
+    * string.
+    */
+    markdown: function(attribute) {
+      if (attribute) {
+        return markdown.toHTML(attribute);
+      }
+      return '';
+    }
+  },
+
+  /** Called after render() completes. We use this to create the HTML class
+  * we need to get the list to render cleanly after markdown renders it.
+  */
+  onRender: function() {
+    this.ui.interests.children('ul').addClass('list-unstyled');
   }
 });
 

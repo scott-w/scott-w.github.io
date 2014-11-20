@@ -20,6 +20,9 @@ var Controller = Backbone.Marionette.Controller.extend({
       app: options.app,
       interests: new Interests({}, {parse: true})
     };
+    /* Run the fetch in the initalize, so if the user hits the homepage, the
+    * data is pre-cached and ready to display immediately.
+    */
     this.options.interests.fetch();
     this.collection = options.collection;
   },
@@ -31,17 +34,21 @@ var Controller = Backbone.Marionette.Controller.extend({
     this._setActive('');
   },
 
-  /** Displays the list of interests.
+  /** Displays the list of interests. The interest model is pre-fetched from
+  * the initialize method, so most of the time, there will be little to no
+  * delay in rendering.
   */
   interests: function() {
-    this.options.app.main.show(new InterestView())
+    var view = new InterestView({
+      model: this.options.interests
+    });
+    this.options.app.main.show(view);
     this._setActive('interests');
   },
 
-  /** The main driver function for switching pages. This works by simply
-  * flipping the active flag in the collection, if necessary. Because the
-  * collection is wired up to the NavView, it will re-render itself
-  * automatically.
+  /** Set the active tab in the navigation list at the top of the screen.
+  * This works by updating the shared Backbone model, which will trigger the
+  * NavigationView to re-render its own list.
   */
   _setActive: function(href) {
     var newActive = this.collection.findWhere({href: href});
