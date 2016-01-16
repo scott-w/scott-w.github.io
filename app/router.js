@@ -1,4 +1,5 @@
-var Backbone = require('backbone');
+var Marionette = require('backbone.marionette');
+
 var IndexView = require('./views/home');
 var InterestView = require('./views/interests');
 var Interests = require('./models/interests');
@@ -8,7 +9,7 @@ var Interests = require('./models/interests');
  * initializer should delegate most of the work here as soon as possible, and let
  * the individual views manage themselves.
  */
-var Controller = Backbone.Marionette.Controller.extend({
+var Controller = Marionette.Object.extend({
 
   /** We need the app and collection in options here so we can effectively
    * manage the rendering of the whole page. Using this method means we don't
@@ -68,7 +69,7 @@ var Controller = Backbone.Marionette.Controller.extend({
 });
 
 
-var Router = Backbone.Marionette.AppRouter.extend({
+var Router = Marionette.AppRouter.extend({
   /** We need this so we can feed the app and collection options through to the
    * controller. We could also expose the controller directly to the application
    * and manage it there if we wished.

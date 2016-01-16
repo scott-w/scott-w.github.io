@@ -1,7 +1,7 @@
-var Backbone = require('backbone');
+var Marionette = require('backbone.marionette');
 
 
-var HomeView = Backbone.Marionette.ItemView.extend({
+var HomeView = Marionette.ItemView.extend({
   template: require('../templates/home.html')
 });
 

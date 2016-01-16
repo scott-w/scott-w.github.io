@@ -1,15 +1,12 @@
-window._ = require('underscore'); // Backbone can't see it otherwise
-
 var Backbone = require('backbone');
-Backbone.$ = window.$; // Use the jQuery from the script tag
-Backbone.Marionette = require('backbone.marionette');
+var Marionette = require('backbone.marionette');
 
 var Nav = require('./collections/nav');
 var NavView = require('./views/nav');
 
 var Router = require('./router');
 
-var App = new Backbone.Marionette.Application();
+var App = new Marionette.Application();
 
 
 /** Our base initializer. The role of this is to get the Router up and running,
@@ -40,4 +37,5 @@ App.addInitializer(function(options) {
   Backbone.history.start();
 });
 
+// Start our application
 App.start();
