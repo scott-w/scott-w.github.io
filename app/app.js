@@ -37,4 +37,5 @@ App.addInitializer(function(options) {
   Backbone.history.start();
 });
 
+// Start our application
 App.start();

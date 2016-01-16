@@ -1,4 +1,4 @@
-var Backbone = require('backbone');
+var Marionette = require('backbone.marionette');
 var markdown = require('markdown').markdown;
 
 
@@ -6,7 +6,7 @@ var markdown = require('markdown').markdown;
  * Making everything a LayoutView gives us access to the region hash if we want
  * to use it later.
  */
-var InterestsView = Backbone.Marionette.LayoutView.extend({
+var InterestsView = Marionette.LayoutView.extend({
   template: require('../templates/interests.html'),
 
   /** Pre-save the jQuery selector.

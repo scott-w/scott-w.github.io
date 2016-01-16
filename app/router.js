@@ -9,7 +9,7 @@ var Interests = require('./models/interests');
  * initializer should delegate most of the work here as soon as possible, and let
  * the individual views manage themselves.
  */
-var Controller = Marionette.Controller.extend({
+var Controller = Marionette.Object.extend({
 
   /** We need the app and collection in options here so we can effectively
    * manage the rendering of the whole page. Using this method means we don't
